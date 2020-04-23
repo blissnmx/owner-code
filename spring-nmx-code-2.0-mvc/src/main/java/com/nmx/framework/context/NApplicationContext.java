@@ -16,6 +16,7 @@ import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -36,7 +37,8 @@ public class NApplicationContext {
         reader = new NBeanDefinitionReader(configLocations);
         try{
             //2、解析配置文件，封装成BeanDefinition
-            List<NBeanDefinition> beanDefinitions = reader.loadBeanDefinitions();
+            final List<NBeanDefinition> nBeanDefinitions = reader.loadBeanDefinitions();
+            List<NBeanDefinition> beanDefinitions = nBeanDefinitions;
 
             //3、缓存BeanDefinition
             doRegistBeanDefinition(beanDefinitions);
@@ -65,7 +67,7 @@ public class NApplicationContext {
         }
     }
 
-    private Object getBean(String beanName) throws ClassNotFoundException, IllegalAccessException, InstantiationException {
+    public Object getBean(String beanName) throws ClassNotFoundException, IllegalAccessException, InstantiationException {
         /**
          * 1、得到bean定义信息
          * 2、实例化所有bean
@@ -131,7 +133,7 @@ public class NApplicationContext {
             String autowiredBeanName = autowired.value().trim();
             if("".equals(autowiredBeanName)){
                 //field.getType().getName() 获取字段的类型
-                autowiredBeanName = field.getType().getSimpleName() ;
+                autowiredBeanName = field.getType().getName() ;
             }
             //暴力访问
             field.setAccessible(true);
@@ -147,5 +149,17 @@ public class NApplicationContext {
         }
 
 
+    }
+
+    public Properties getConfig() {
+        return this.reader.getConfig();
+    }
+
+    public int getBeanDefinitionCount() {
+        return this.beanDefinitionMap.size();
+    }
+
+    public String[] getBeanDefinitionNames() {
+        return this.beanDefinitionMap.keySet().toArray(new String[this.beanDefinitionMap.size()]);
     }
 }

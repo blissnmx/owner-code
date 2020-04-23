@@ -13,7 +13,10 @@ import java.util.Map;
 public class NModelAndView {
     private String viewName;
     private Map<String,?> model;
-
+    public NModelAndView(String viewName, Map<String, ?> model) {
+        this.viewName = viewName;
+        this.model = model;
+    }
     public String getViewName() {
         return viewName;
     }

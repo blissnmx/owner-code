@@ -5,10 +5,13 @@ import com.nmx.framework.annotation.NController;
 import com.nmx.framework.annotation.NRequestMapping;
 import com.nmx.framework.annotation.NRequestParam;
 import com.demo.DemoService;
+import com.nmx.framework.webmvc.servlet.NModelAndView;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * @author ning_mx
@@ -32,4 +35,13 @@ public class DemoController {
         }
     }
 
+    @NRequestMapping("/first.html")
+    public NModelAndView queryName(@NRequestParam("name") String name){
+        String result = demoService.queryInfo(name);
+        Map<String,Object> model = new HashMap<String,Object>();
+        model.put("name", name);
+        model.put("data", result);
+        model.put("token", "123456");
+        return new NModelAndView("first.html",model);
+    }
 }

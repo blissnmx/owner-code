@@ -4,8 +4,6 @@ package com.nmx.framework.beans.support;/**
  * @description
  */
 
-import com.nmx.framework.annotation.NController;
-import com.nmx.framework.annotation.NService;
 import com.nmx.framework.beans.config.NBeanDefinition;
 
 import java.io.File;
@@ -31,7 +29,9 @@ public class NBeanDefinitionReader {
         //扫描类
         doScanner(configContext.getProperty("scanPackage"));
     }
-
+    public Properties getConfig(){
+        return this.configContext;
+    }
     private void doLoadConfig(String configLocation) throws IOException {
         //1、加载配置文件
         InputStream is = this.getClass().getClassLoader().getResourceAsStream(configLocation.replaceAll("classpath:",""));
@@ -68,7 +68,7 @@ public class NBeanDefinitionReader {
             Class<?> beanClass = Class.forName(className);
             //接口类型，不加入BeanDefinition缓存
             if(beanClass.isInterface()) continue;
-            result.add(new NBeanDefinition(toLowerFirstCase(beanClass.getSimpleName()), beanClass.getName()));
+            result.add(doCreateBeanDefinition(toLowerFirstCase(beanClass.getSimpleName()), beanClass.getName()));
             //类的接口注入
             for(Class<?> inf : beanClass.getInterfaces() ){
                 result.add(new NBeanDefinition(inf.getName(), beanClass.getName()));
@@ -77,7 +77,12 @@ public class NBeanDefinitionReader {
         }
         return result;
     }
-
+    private NBeanDefinition doCreateBeanDefinition(String beanName, String beanClassName) {
+        NBeanDefinition beanDefinition = new NBeanDefinition();
+        beanDefinition.setFactoryBeanName(beanName);
+        beanDefinition.setBeanClassName(beanClassName);
+        return beanDefinition;
+    }
 
     public String toLowerFirstCase(String simpleName){
         char[] chars = simpleName.toCharArray();

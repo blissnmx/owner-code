@@ -24,13 +24,14 @@ import java.util.regex.Pattern;
  * @date 2020/4/14
  */
 public class NDisptcherServlet extends HttpServlet{
-    private Map<String,Object> iocMapping = new HashMap<String, Object>();
-    private List<String> clazzs = new ArrayList<String>();
+    private NApplicationContext applicationContext;
+    //private Map<String,Object> iocMapping = new HashMap<String, Object>();
+    //private List<String> clazzs = new ArrayList<String>();
     private Map<NHanderMapping, NHanderAdaptor> handerAdaptors = new HashMap<NHanderMapping, NHanderAdaptor>();
     private List<NHanderMapping> handlerMapping = new ArrayList<NHanderMapping>();
     private List<NViewResolver> viewResolvers = new ArrayList<NViewResolver>();
 
-    private Properties configContext = new Properties();
+    //private Properties configContext = new Properties();
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         this.doPost(req, resp);
@@ -52,7 +53,7 @@ public class NDisptcherServlet extends HttpServlet{
         //1、通过URL获得一个HandlerMapping
         NHanderMapping handler = getHandler(req);
         if(handler == null){
-            processDispatchResult(req,resp,new NModelAndView("404"));
+            processDispatchResult(req,resp,new NModelAndView("404.html"));
             return;
         }
 
@@ -65,23 +66,6 @@ public class NDisptcherServlet extends HttpServlet{
         // 就把ModelAndView变成一个ViewResolver
         processDispatchResult(req,resp,mv);
 
-       /* //2、反射调用invoker方法
-        Method method = handler.method;
-        Map<String, String[]> parameterMap = req.getParameterMap();
-        Class<?>[] parameterTypes = method.getParameterTypes();
-        Object[] paramValues = new Object[parameterTypes.length];
-        for(Map.Entry<String,String[]> entry : parameterMap.entrySet()){
-            if(handler.paramIndexMapping.containsKey(entry.getKey())){
-                Integer index = handler.paramIndexMapping.get(entry.getKey());
-                String strValue = Arrays.toString(entry.getValue()).replaceAll("\\[|\\]","").replaceAll("\\s",",");
-
-                paramValues[index] = convertType(parameterTypes[index],strValue);
-            }
-        }
-        paramValues[handler.paramIndexMapping.get(HttpServletRequest.class.getName())] = req;
-        paramValues[handler.paramIndexMapping.get(HttpServletResponse.class.getName())] = resp;
-        Object o = iocMapping.get(toLowerFirstCase(method.getDeclaringClass().getSimpleName()));
-        method.invoke(o,paramValues);*/
 
     }
 
@@ -93,19 +77,16 @@ public class NDisptcherServlet extends HttpServlet{
         return null ;
     }
 
-    private void processDispatchResult(HttpServletRequest req, HttpServletResponse resp, NModelAndView nModelAndView) {
-    }
+    private void processDispatchResult(HttpServletRequest req, HttpServletResponse resp, NModelAndView mv) throws Exception {
+        if(null == mv){return;}
+        if(this.viewResolvers.isEmpty()){return;}
 
-    private Object convertType(Class<?> parameterType, String  value) {
-        Object result = null;
-        if(Integer.class == parameterType){
-            result = Integer.valueOf(value);
-        }else if(String.class == parameterType){
-            result = String.valueOf(value);
-        }else{
-            System.out.println("");
+        for (NViewResolver viewResolver : this.viewResolvers) {
+            NView view = viewResolver.resolveViewName(mv.getViewName());
+            //直接往浏览器输出
+            view.render(mv.getModel(),req,resp);
+            return;
         }
-        return result;
     }
 
     private NHanderMapping getHandler(HttpServletRequest req) {
@@ -128,7 +109,7 @@ public class NDisptcherServlet extends HttpServlet{
     public void init(ServletConfig config) throws ServletException {
 
         try {
-            NApplicationContext applicationContext = new NApplicationContext(config.getInitParameter("contextConfigLocation"));
+            applicationContext = new NApplicationContext(config.getInitParameter("contextConfigLocation"));
 
             //初始化mvc九大组件
             initStratefies(applicationContext);
@@ -139,7 +120,7 @@ public class NDisptcherServlet extends HttpServlet{
         System.out.println("NMX MVC Framework is init finish");
     }
 
-    private void initStratefies(NApplicationContext context) {
+    private void initStratefies(NApplicationContext context) throws Exception {
         //        //多文件上传的组件
 //        initMultipartResolver(context);
 //        //初始化本地语言环境
@@ -167,12 +148,27 @@ public class NDisptcherServlet extends HttpServlet{
     }
 
     private void initViewResolvers(NApplicationContext context) {
+        String templateRoot = context.getConfig().getProperty("templateRoot");
+        String templateRootPath = this.getClass().getClassLoader().getResource(templateRoot).getFile();
+
+        File templateRootDir = new File(templateRootPath);
+        for (File file : templateRootDir.listFiles()) {
+            if(!file.isDirectory()){
+                this.viewResolvers.add(new NViewResolver(templateRootPath));
+                continue;
+            }else{
+                //其他模板
+            }
+        }
     }
 
-    private void initHandlerMappings(NApplicationContext context) {
-        if(iocMapping.isEmpty())return;
-        for (Map.Entry<String,Object> entry:iocMapping.entrySet()) {
-            Class<?> clazz= entry.getValue().getClass();
+    private void initHandlerMappings(NApplicationContext applicationContext) throws Exception {
+        if(applicationContext.getBeanDefinitionCount() == 0){ return;}
+
+        for (String beanName : applicationContext.getBeanDefinitionNames()) {
+            Object instance = applicationContext.getBean(beanName);
+
+            Class<?> clazz= instance.getClass();
             if(!clazz.isAnnotationPresent(NController.class)) continue;
             String baseUrl = "";
             if(clazz.isAnnotationPresent(NRequestMapping.class)){
@@ -186,103 +182,11 @@ public class NDisptcherServlet extends HttpServlet{
                 NRequestMapping annotationMethod = method.getAnnotation(NRequestMapping.class);
                 String url =(baseUrl +"/"+ annotationMethod.value()).replaceAll("/+","/");
                 Pattern pattern = Pattern.compile(url);
-                handlerMapping.add(new Handler(entry.getKey(),method,pattern));
+                handlerMapping.add(new NHanderMapping(instance,method,pattern));
                 System.out.println("Mapped :"+url+" method:"+method);
             }
         }
     }
-
-    private void doAutowired() throws IllegalAccessException {
-        for(Object object : iocMapping.values()){
-            if(object == null ) continue;
-            Class<?> clazz = object.getClass();
-            System.out.println(clazz.getName());
-            if(clazz.isAnnotationPresent(NController.class) || clazz.isAnnotationPresent(NService.class)){
-                Field[] declaredFields = clazz.getDeclaredFields();
-                for (Field field :declaredFields) {
-                    if (!field.isAnnotationPresent(NAutowired.class)) continue;
-                    NAutowired annotation = field.getAnnotation(NAutowired.class);
-                    Class<?> fieldClass = field.getType();
-                    String beanName = fieldClass.getName();
-                    if(!"".equals(annotation.value())){
-                        beanName = annotation.value();
-                    }
-                    field.setAccessible(true);
-                    field.set(iocMapping.get(toLowerFirstCase(clazz.getSimpleName())), iocMapping.get(beanName));
-                }
-            }else{
-                System.out.println("unknow bean ");
-            }
-
-        }
-
-    }
-
-    private void doInstance() throws Exception {
-        for (String clazzName : clazzs) {
-            Class<?> clazz = Class.forName(clazzName);
-            if(clazz.isAnnotationPresent(NController.class)){
-                iocMapping.put(toLowerFirstCase(clazz.getSimpleName()), clazz.newInstance());
-            }else if(clazz.isAnnotationPresent(NService.class)){
-                NService service = clazz.getAnnotation(NService.class);
-                String beanName = clazz.getSimpleName();
-
-                if(!"".equals(service.value())){
-                    beanName = service.value();
-                }
-                Object instance = clazz.newInstance();
-                iocMapping.put(beanName, instance);
-                for(Class<?> i : clazz.getInterfaces()){
-                    if(iocMapping.containsKey(i.getName())){
-                        throw new Exception("The beanName is exists !");
-                    }
-                    //key为接口的类型，全限定名
-                    iocMapping.put(i.getName(), instance);
-                }
-            }else{
-                System.out.println("unkonw class");
-                continue;
-            }
-        }
-
-    }
-
-    private void doLoadPropreties(ServletConfig config) throws IOException {
-        //1、加载配置文件
-        String contextConfigLocation = config.getInitParameter("contextConfigLocation").replaceAll("classpath:","");
-        InputStream is = this.getClass().getClassLoader().getResourceAsStream(contextConfigLocation);
-        configContext.load(is);
-        if(is !=null){
-            try {
-                is.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    private void doScanner(String scanPackage) throws ClassNotFoundException {
-        URL filePath = this.getClass().getClassLoader().getResource("/" + scanPackage.replaceAll("\\.", "/"));
-        File classDir = new File(filePath.getFile());
-        for (File file : classDir.listFiles()) {
-            if(file.isDirectory()){
-                doScanner(scanPackage+"."+file.getName());
-            }else{
-                if(!file.getName().endsWith(".class")) continue;
-                //class类全限定名
-                String clazzName = (scanPackage + "." + file.getName().replace(".class", ""));
-                clazzs.add(clazzName);
-            }
-        }
-    }
-
-
-    private String toLowerFirstCase(String simpleName){
-        char[] chars = simpleName.toCharArray();
-        chars[0] += 32 ;
-        return String.valueOf(chars);
-    }
-
 
 
 }

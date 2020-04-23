@@ -55,4 +55,20 @@ public class NHanderMapping {
         }
 
     }
+
+    public Object getController() {
+        return controller;
+    }
+
+    public Method getMethod() {
+        return method;
+    }
+
+    public Pattern getPattern() {
+        return pattern;
+    }
+
+    public Map<String, Integer> getParamIndexMapping() {
+        return paramIndexMapping;
+    }
 }
